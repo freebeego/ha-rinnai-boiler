@@ -125,7 +125,7 @@ async def verify(path):
     try:
         response = await client.get('/health')
         health = await response.json()
-        assert health['room_control_id'] == headers['Referer'] and not health['online']
+        assert health['room_control_id'] == '*' * 8 + headers['Referer'][-4:] and not health['online']
         # Every captured request is accepted and echoed byte for byte when idle.
         for request, raw in frames:
             if request:
@@ -134,6 +134,21 @@ async def verify(path):
                 assert int(response.headers['Content-Length']) == len(raw)
         await asyncio.sleep(0)
         assert coord.local_active and coord.data['source'] == 'Локально'
+        # Clock in the reply (like the cloud): implausible time or a failing clock leaves the packet as is.
+        import datetime as _dt
+        def broken():
+            raise RuntimeError('clock')
+        for clock in (lambda: _dt.datetime(2000, 1, 1), broken):
+            coord.server._clock = clock
+            _, body = await post(initial)
+            assert body == initial
+        coord.server._clock = lambda: _dt.datetime(2026, 11, 15, 7, 5, 9)  # воскресенье
+        _, body = await post(initial)
+        reply = protocol.Packet.parse(body)
+        if len(reply.data) >= 112:
+            assert reply.prefix == 're0101' and reply.data[98:112] == '05070015112609'
+            assert reply.data[:98] == protocol.Packet.parse(initial).data[:98]
+        coord.server._clock = None
         # Return to the captured initial state before producing commands.
         await post(initial)
         await asyncio.sleep(0)
@@ -186,7 +201,7 @@ async def verify(path):
         with patch.object(server_mod.time, 'monotonic', return_value=future):
             _, body = await post(initial)
             assert body == initial
-        coord.server.last_seen = time.time() - 31
+        coord.server.last_seen = time.monotonic() - 31
         try:
             await coord.async_set_room_temp(25)
             assert False, 'Offline write must fail'

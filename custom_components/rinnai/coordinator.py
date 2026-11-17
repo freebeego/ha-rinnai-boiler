@@ -43,7 +43,7 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
         self.server = RinnaiLocalServer(port, self._on_local_state, self.room_control_id, clock=self._local_now)
         self._local_state: dict | None = None
         self._cloud_extras: dict = {}
-        self._started = time.time()
+        self._started = time.monotonic()
 
     # ---------- источник данных ----------
 
@@ -90,7 +90,7 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
             # ему льготное окно и отдаём последнее известное состояние, а не
             # роняем интеграцию в ERROR. Молчит дольше окна — это уже потеря связи.
             last_contact = max(self._started, self.server.last_seen or 0)
-            if time.time() - last_contact < LOCAL_GRACE_SECONDS:
+            if time.monotonic() - last_contact < LOCAL_GRACE_SECONDS:
                 _LOGGER.debug("Ждём пульт на локальном сервере: %s", err)
                 # Пока состояния нет вовсе (первый опрос) — сущности остаются
                 # недоступными, а не показывают «выключено» с пустыми данными.
