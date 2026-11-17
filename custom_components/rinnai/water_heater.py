@@ -31,8 +31,8 @@ class RinnaiWaterHeater(RinnaiEntity, WaterHeaterEntity):
     _attr_operation_list = [STATE_ON, STATE_OFF]
     _attr_min_temp = HW_MIN
     _attr_max_temp = HW_MAX
-    # Пульт показывает ГВС с шагом 0.5 °C, но половину, присланную командой, держит ~15 с и сам возвращает
-    # целое (проверено 2026-11-17: 0xaa → через 15 с 0x2a). Поэтому из HA — целые градусы, показ — как у пульта.
+    # Половину градуса ГВС пульт держит ~15–20 с и сам возвращает целое — и при команде, и при установке
+    # кнопками пульта (проверено 2026-11-17: 0xaa → 0x2a). Поэтому из HA — целые градусы, показ — как у пульта.
     _attr_target_temperature_step = 1
     _attr_precision = 0.5
 
