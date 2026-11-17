@@ -115,6 +115,12 @@ def half_degree(value: int) -> float:
     return (value & 0x7F) + 0.5 if value & 0x80 else float(value)
 
 
+def encode_half_degree(value: float) -> int:
+    """Обратное к half_degree: 42.5 → 0x2a | 0x80."""
+    whole = int(value)
+    return (whole & 0x7F) | (0x80 if value - whole >= 0.5 else 0)
+
+
 def decode_state(data: str) -> dict:
     """Разобрать известные поля; неизвестные не трогаем."""
     if len(data) < 20:

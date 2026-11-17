@@ -75,7 +75,7 @@ class RinnaiClimate(RinnaiEntity, ClimateEntity):
 
     def _target(self) -> float | None:
         key = "circuit_set" if self._circuit_mode else "room_set"
-        value = self._data.get(key)
+        value = self.coordinator.displayed(key, self._data.get(key))
         if value is None:
             return None
         # В режиме «по теплоносителю» пульт дублирует уставку контура и в байт

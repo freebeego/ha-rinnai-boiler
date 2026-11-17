@@ -33,4 +33,7 @@ for raw, mode in (("00", "normal"), ("03", "economy"), ("04", "sleep"), ("80", "
     assert protocol.SMART_MODES[s["smart_mode"]] == mode, (raw, s["smart_mode"])
 assert protocol.decode_state(state(b0="1f"))["pre_heat"] is True
 assert protocol.decode_state(state(b9="80"))["away"] is True
+for v in (35.0, 42.0, 42.5, 59.5, 60.0):
+    assert protocol.half_degree(protocol.encode_half_degree(v)) == v, v
+assert protocol.encode_half_degree(42.5) == 0xAA
 print("verify_fork: OK")

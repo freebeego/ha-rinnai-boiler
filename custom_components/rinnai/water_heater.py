@@ -31,6 +31,9 @@ class RinnaiWaterHeater(RinnaiEntity, WaterHeaterEntity):
     _attr_operation_list = [STATE_ON, STATE_OFF]
     _attr_min_temp = HW_MIN
     _attr_max_temp = HW_MAX
+    # Пульт задаёт ГВС с шагом 0.5 °C (отопление — целыми градусами).
+    _attr_target_temperature_step = 0.5
+    _attr_precision = 0.5
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, "water_heater", "ГВС")
@@ -39,7 +42,7 @@ class RinnaiWaterHeater(RinnaiEntity, WaterHeaterEntity):
         return self._data.get("hw_cur")
 
     def _target(self) -> float | None:
-        return self._data.get("hw_set")
+        return self.coordinator.displayed("hw_set", self._data.get("hw_set"))
 
     # HA 2026.11 переименовал свойства температуры в native_* (старые перестанут работать в 2027.11).
     if hasattr(WaterHeaterEntity, "native_current_temperature"):
@@ -60,7 +63,7 @@ class RinnaiWaterHeater(RinnaiEntity, WaterHeaterEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
-        value = max(HW_MIN, min(HW_MAX, int(round(temperature))))
+        value = max(HW_MIN, min(HW_MAX, round(float(temperature) * 2) / 2))
         await self.coordinator.async_set_hot_water_temp(value)
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:

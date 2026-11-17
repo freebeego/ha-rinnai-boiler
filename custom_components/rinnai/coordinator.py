@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import RinnaiApi, RinnaiError, RinnaiPultOfflineError
 from .const import (
     CONF_DEVICE_ID, CONF_LOCAL_PORT, CONF_ROOM_CONTROL_ID, DEFAULT_LOCAL_PORT,
-    CONF_LOCAL_ONLY, FLAG_POWER, FLAG_HEATING, FLAG_HOT_WATER, FLAG_CIRCUIT_MODE,
+    CONF_LOCAL_ONLY, COMMAND_TTL_SECONDS, FLAG_POWER, FLAG_HEATING, FLAG_HOT_WATER, FLAG_CIRCUIT_MODE,
     DOMAIN, LOCAL_GRACE_SECONDS, SCAN_INTERVAL_SECONDS,
 )
 from . import protocol
@@ -43,6 +43,9 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
         self._local_state: dict | None = None
         self._cloud_extras: dict = {}
         self._started = time.monotonic()
+        # Уставка, отправленная пульту, показывается сразу, пока пакет пульта её не подтвердит
+        # (до срока жизни команды): иначе «−»/«+» на панели откатываются и копятся от старого значения.
+        self._optimistic: dict[str, tuple[float, float]] = {}
 
     # ---------- источник данных ----------
 
@@ -64,6 +67,21 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
         self.hass.loop.call_soon_threadsafe(
             lambda: self.async_set_updated_data(self._merged())
         )
+
+    def displayed(self, key: str, measured: float | None) -> float | None:
+        """Значение для показа: ожидающее подтверждения или измеренное."""
+        pending = self._optimistic.get(key)
+        if pending is None:
+            return measured
+        value, deadline = pending
+        if measured == value or time.monotonic() > deadline:
+            del self._optimistic[key]
+            return measured
+        return value
+
+    def _remember(self, key: str, value: float) -> None:
+        self._optimistic[key] = (value, time.monotonic() + COMMAND_TTL_SECONDS)
+        self.async_update_listeners()
 
     def _merged(self) -> dict:
         data = dict(self._local_state or {})
@@ -149,20 +167,24 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
     async def async_set_room_temp(self, temp: int) -> None:
         if self.local_only or self.local_active:
             self._patch_setpoint(protocol.IDX_ROOM_SET, temp)
+            self._remember("room_set", temp)
             return
         await self._send_cloud(self.api.set_room_temp, temp)
 
     async def async_set_circuit_temp(self, temp: int) -> None:
         if self.local_only or self.local_active:
             self._patch_setpoint(protocol.IDX_CIRCUIT_SET, temp)
+            self._remember("circuit_set", temp)
             return
         await self._send_cloud(self.api.set_circuit_temp, temp)
 
-    async def async_set_hot_water_temp(self, temp: int) -> None:
+    async def async_set_hot_water_temp(self, temp: float) -> None:
         if self.local_only or self.local_active:
-            self._patch_local(protocol.IDX_HW_SET, temp)
+            # Пульт задаёт ГВС с шагом 0.5 °C: половина — старший бит байта (как и при чтении).
+            self._patch_local(protocol.IDX_HW_SET, protocol.encode_half_degree(temp))
+            self._remember("hw_set", temp)
             return
-        await self._send_cloud(self.api.set_hot_water_temp, temp)
+        await self._send_cloud(self.api.set_hot_water_temp, int(round(temp)))
 
     async def async_set_flags(self, flags: int) -> None:
         if self.local_only or self.local_active:

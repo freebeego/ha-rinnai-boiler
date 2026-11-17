@@ -28,6 +28,7 @@ class Coordinator:
         self.hass = hass
         self.data = None
     def async_set_updated_data(self, data): self.data = data
+    def async_update_listeners(self): self.listener_updates = getattr(self, 'listener_updates', 0) + 1
 
 class ConfigFlow:
     def __init_subclass__(cls, **kwargs): pass
@@ -159,13 +160,24 @@ async def verify(path):
         expected = protocol.set_byte(protocol.set_byte(source.data, 1, 25), 2, 25)
         assert packet.prefix == 'sm0101' and packet.data == expected
         assert body == protocol.Packet('sm0101', 1, expected).build()
-        # HA continues showing the measured state until the pult confirms it.
+        # HA continues showing the measured state until the pult confirms it,
+        # entities show the sent value meanwhile (and fall back once the pult reports it).
         await asyncio.sleep(0)
         assert coord.data['room_set'] == 24
+        assert coord.displayed('room_set', 24) == 25 and coord.listener_updates >= 1
         confirmation = protocol.Packet('re0101', 1, expected).build()
         await post(confirmation)
         await asyncio.sleep(0)
-        assert coord.data['room_set'] == 25
+        assert coord.data['room_set'] == 25 and coord.displayed('room_set', 25) == 25
+        await coord.async_set_hot_water_temp(42.5)
+        _, body = await post(initial)
+        assert protocol.byte(protocol.Packet.parse(body).data, 3) == 0xAA
+        assert coord.displayed('hw_set', 50.0) == 42.5
+        await post(protocol.Packet('re0101', 1, protocol.set_byte(protocol.Packet.parse(initial).data, 3, 0xAA)).build())
+        await asyncio.sleep(0)
+        assert coord.data['hw_set'] == 42.5 and coord.server.pending_commands == 0
+        await post(initial)
+        await asyncio.sleep(0)
         # A lost reply: the pult repeats its old state, so the command is sent again; once confirmed, it is dropped.
         assert coord.server.pending_commands == 0
         await coord.async_set_hot_water_temp(46)
@@ -222,7 +234,7 @@ async def verify(path):
                 protocol.Packet.parse(raw)
                 assert False, 'Malformed frame must fail'
             except protocol.ProtocolError: pass
-        print(f'PASS: {len(frames)} captured frames; real HTTP replay; room/DHW commands; confirmation; resend after a lost reply; identity; checksum; expiry; offline; registration.')
+        print(f'PASS: {len(frames)} captured frames; real HTTP replay; room/DHW commands (DHW half degrees); confirmation; instant setpoint feedback; resend after a lost reply; identity; checksum; expiry; offline; registration.')
     finally:
         await client.close()
 
