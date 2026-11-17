@@ -151,6 +151,16 @@ async def verify(path):
         await post(confirmation)
         await asyncio.sleep(0)
         assert coord.data['room_set'] == 25
+        # A lost reply: the pult repeats its old state, so the command is sent again; once confirmed, it is dropped.
+        assert coord.server.pending_commands == 0
+        await coord.async_set_hot_water_temp(46)
+        _, first = await post(initial)
+        _, again = await post(initial)
+        resent = protocol.set_byte(source.data, 3, 46)
+        assert protocol.Packet.parse(first).data == protocol.Packet.parse(again).data == resent
+        confirmed = protocol.Packet('re0101', 1, resent).build()
+        _, body = await post(confirmed)
+        assert body == confirmed and coord.server.pending_commands == 0
 
         await coord.async_set_hot_water_temp(47)
         _, body = await post(initial)
@@ -197,7 +207,7 @@ async def verify(path):
                 protocol.Packet.parse(raw)
                 assert False, 'Malformed frame must fail'
             except protocol.ProtocolError: pass
-        print(f'PASS: {len(frames)} captured frames; real HTTP replay; room/DHW commands; confirmation; identity; checksum; expiry; offline; registration.')
+        print(f'PASS: {len(frames)} captured frames; real HTTP replay; room/DHW commands; confirmation; resend after a lost reply; identity; checksum; expiry; offline; registration.')
     finally:
         await client.close()
 

@@ -149,15 +149,23 @@ class RinnaiLocalServer:
         data = packet.data
         prefix = packet.prefix
         if self._pending:
-            pending, self._pending = self._pending, []
+            # Команда держится в очереди, пока пакет пульта её не подтвердит (правка больше ничего
+            # не меняет) или не истечёт срок: ответ мог не дойти (обрыв связи, перезапуск HA), а все
+            # правки можно безопасно применить повторно (установка/сброс битов, фиксированные значения).
+            pending, keep = self._pending, []
             for deadline, patch in pending:
                 if time.monotonic() > deadline:
                     _LOGGER.warning("Просроченная команда пульту отброшена")
                     continue
                 try:
-                    data = patch(data)
+                    patched = patch(data)
                 except ProtocolError as err:
                     _LOGGER.error("команда пропущена, правка невозможна: %s", err)
+                    continue
+                if patched != data:
+                    data = patched
+                    keep.append((deadline, patch))
+            self._pending = keep
             if data != packet.data:
                 # Пульт применяет изменения только у пакета с этим префиксом.
                 prefix = COMMAND_REPLY_PREFIX
