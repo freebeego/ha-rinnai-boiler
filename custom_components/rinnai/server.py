@@ -17,7 +17,7 @@ import time
 
 from aiohttp import web
 
-from .protocol import Packet, ProtocolError, decode_state, checksum
+from .protocol import Packet, ProtocolError, decode_state, checksum, set_clock
 from .const import LOCAL_TIMEOUT_SECONDS, COMMAND_TTL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,8 +32,11 @@ TOKEN_LENGTH = 32
 class RinnaiLocalServer:
     """HTTP-сервер, к которому подключается пульт вместо облака."""
 
-    def __init__(self, port: int, on_state: Callable[[dict, str], None], room_control_id: str) -> None:
+    def __init__(self, port: int, on_state: Callable[[dict, str], None], room_control_id: str,
+                 clock: Callable[[], object] | None = None) -> None:
         self._port = port
+        # Часы для ответа пульту (как у облака): функция, возвращающая местное время; None — не подставлять.
+        self._clock = clock
         self.room_control_id = room_control_id.lower()
         self._on_state = on_state
         self._runner: web.AppRunner | None = None
@@ -160,6 +163,9 @@ class RinnaiLocalServer:
                 prefix = COMMAND_REPLY_PREFIX
                 _LOGGER.info("Команда отправлена пульту: %s -> %s", packet.data, data)
 
+        # Время в каждом ответе, как у облака (префикс не меняет).
+        if self._clock is not None:
+            data = set_clock(data, self._clock())
         reply = Packet(prefix=prefix, command=packet.command, data=data)
         return self._reply(reply)
 

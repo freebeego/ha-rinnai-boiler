@@ -101,6 +101,7 @@ async def verify(path):
     entry = types.SimpleNamespace(data={'room_control_id': 'aabbccddeeff', 'local_only': True}, options={})
     coord = coord_mod.RinnaiCoordinator(hass, entry)
     assert coord.api is None
+    coord.server._clock = None  # эхо-проверка ниже — без подстановки часов; часы проверяет tests/verify_fork.py
     try:
         await coord._async_update_data()
         assert False, 'No-state update must fail'
