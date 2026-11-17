@@ -1,10 +1,9 @@
 """Состояние котла: локальный сервер, если пульт подключился, иначе облако."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import time
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
@@ -183,9 +182,10 @@ class RinnaiCoordinator(DataUpdateCoordinator[dict]):
         return datetime.now(ZoneInfo(tz))
 
     async def async_set_smart_mode(self, value: int) -> None:
-        """Local-patch: режим Smart control (байт 10) — только локально."""
-        if not (self.local_only or self.local_active):
-            raise HomeAssistantError("Режим меняется только при локальной работе пульта")
+        """Режим Smart control (байт 10) — только локально.
+
+        Байт пишется целиком: в записи обмена встречались только 00/03/04/80, других битов в нём не видели.
+        """
         self._patch_local(protocol.IDX_SMART, value)
 
     async def async_set_economy(self, enable: bool) -> None:

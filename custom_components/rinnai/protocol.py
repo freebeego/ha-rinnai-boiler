@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 ETX = "7d"
 
@@ -100,7 +101,7 @@ IDX_AWAY = 9
 # Байты 7-8 в пакете пульта совпадают с облачным запросом кода ошибки
 # (ffff = ошибок нет) — проверено побайтовым сопоставлением.
 IDX_ERROR = 7
-# Local-patch 2026-11-17 (дамп обмена приложение → облако → WF-100W-RU):
+# По записи обмена приложение → облако → WF-100W-RU (2026-11-17):
 # байт 10 — режим «Smart control»: 00 обычный, 03 «Save» (эконом), 04 «Sleep» (ночной), 80 «Auto»
 IDX_SMART = 10
 SMART_MODES = {0x00: "normal", 0x03: "economy", 0x04: "sleep", 0x80: "auto"}
@@ -146,8 +147,8 @@ def decode_state(data: str) -> dict:
     }
 
 
-def set_clock(data: str, now) -> str:
-    """Local-patch: подставить время как облако (байты 49–55, BCD). Короткий пакет — без изменений."""
+def set_clock(data: str, now: datetime) -> str:
+    """Подставить время как облако (байты 49–55, BCD). Короткий пакет — без изменений."""
     if len(data) < (IDX_CLOCK + 7) * 2:
         return data
     vals = [now.minute, now.hour, (now.weekday() + 1) % 7, now.day, now.month, now.year % 100, now.second]

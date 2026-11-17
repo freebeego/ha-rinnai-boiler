@@ -15,7 +15,7 @@ FLAG_SWITCHES = (
     ("hot_water", "ГВС вкл", FLAG_HOT_WATER, None),
     ("heating", "Отопление вкл", FLAG_HEATING, None),
     ("circuit_mode", "По теплоносителю", FLAG_CIRCUIT_MODE, EntityCategory.CONFIG),
-    # Local-patch 2026-11-17: «Hot water preheating» в приложении = бит 0x10 байта 0 (проверено дампом)
+    # «Hot water preheating» в приложении = бит 0x10 байта 0 (проверено записью обмена)
     ("pre_heat", "Подогрев ГВС", FLAG_PRE_HEAT, None),
 )
 

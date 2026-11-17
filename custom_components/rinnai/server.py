@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 import logging
 import time
 
@@ -33,7 +34,7 @@ class RinnaiLocalServer:
     """HTTP-сервер, к которому подключается пульт вместо облака."""
 
     def __init__(self, port: int, on_state: Callable[[dict, str], None], room_control_id: str,
-                 clock: Callable[[], object] | None = None) -> None:
+                 clock: Callable[[], datetime] | None = None) -> None:
         self._port = port
         # Часы для ответа пульту (как у облака): функция, возвращающая местное время; None — не подставлять.
         self._clock = clock
