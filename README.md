@@ -1,30 +1,3 @@
-# Rinnai Boiler — fork freebeego
-
-Форк [sasamix/ha-rinnai-boiler](https://github.com/sasamix/ha-rinnai-boiler) для пульта WF-100W-RU в локальном режиме.
-Добавлено (проверено записью обмена приложения Smart Boiler → облако → пульт и на живом котле):
-
-- **Режим Smart control** — `select` «Режим»: Обычный / Эконом / Ночной / Авто (байт 10 пакета состояния: 00 / 03 / 04 / 80).
-  В режиме «Авто» пульт сам меняет уставки (на тестовом котле поставил теплоноситель 60 °C, ГВС 40 °C).
-- **Подогрев ГВС** — `switch` «Подогрев ГВС» (бит 0x10 байта 0, «Hot water preheating»; пульт выключает его сам через 30 мин).
-- **Часы пульта** — в каждом ответе пульту подставляется местное время HA (байты 49–55, BCD: минуты, часы,
-  день недели с 0 = воскресенье, число, месяц, год, секунды), как это делает облако.
-
-Карта байтов, найденная по записи:
-
-| Байт | Что |
-|---|---|
-| 0 | флаги: 0x01 питание, 0x02 по теплоносителю, 0x04 отопление, 0x08 ГВС, 0x10 подогрев ГВС, 0x20 быстрый нагрев (не проверено) |
-| 9 | отъезд (Outing): 0x80 |
-| 10 | Smart control: 00 / 03 эконом / 04 ночной / 80 авто |
-| 13 | расписание пульта: 0x80 включено, 0x81 суточное, 0x83 суточное + недельное |
-| 26–32 | недельное расписание (не расшифровано) |
-| 49–55 | часы (см. выше) |
-
-Wake-up, Outing setting и Returning home setting пакет пульта не меняют — это расписания облака.
-Проверки: `python tests/verify_local.py` (автора) и `python tests/verify_fork.py` (изменения форка).
-
----
-
 # Rinnai Boiler — local-first fork
 
 Home Assistant integration for Rinnai WF-100W / WF-S100 Wi-Fi controllers.
@@ -71,6 +44,23 @@ HA reports the next measured state packet, rather than assuming a command worked
 
 **Пока пульт направлен на HA, штатное приложение Rinnai не видит котёл.**
 Для возврата облака выключите перенаправление и переподключите пульт к Wi-Fi.
+
+## Smart control, hot water preheat and controller clock (local mode)
+
+Found by recording the official app → cloud → WF-100W-RU exchange and confirmed on a real boiler:
+
+- **Smart control mode** — `select` «Режим Smart»: normal / eco (Save) / sleep / auto, byte 10 of the status packet
+  (`00` / `03` / `04` / `80`). In auto the controller changes the setpoints itself (on the test boiler: circuit 60 °C, DHW 40 °C).
+- **Hot water preheat** — `switch` «Подогрев ГВС», bit `0x10` of byte 0 (the controller switches it off by itself after 30 min).
+- **Controller clock** — like the cloud, every reply carries the local time in bytes 49–55 (BCD: minute, hour,
+  weekday with 0 = Sunday, day, month, year, second). It is skipped if Home Assistant's clock looks wrong.
+- **Commands survive a lost reply** — a queued change is re-sent until a status packet confirms it (still expires after 30 s).
+- `/health` no longer shows the full controller MAC (it is the only identity check of `/state`).
+
+Status bytes seen in the capture: 9 — away (`0x80`), 10 — Smart control, 13 — controller schedule
+(`0x80` on, `0x81` 24 h, `0x83` 24 h + weekly), 26–32 — weekly schedule (not decoded), 49–55 — clock.
+Wake-up, Outing setting and Returning home setting do not change the controller's packet — the cloud runs them.
+
 
 ## Changes in 2.2.3
 
